@@ -1,0 +1,5148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Millet Nutrition Quiz</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<style>
+    /* ---------- PAGE & FONTS ---------- */
+    :root{
+        --bg1: #00b894;
+        --bg2: #0984e3;
+        --accent: #ffeaa7;
+        --seed: #d35400;
+        --seed-size: 18px; /* size of each seed element */
+    }
+
+    html,body{
+        height:100%;
+        margin:0;
+        padding:0;
+        font-family: 'Montserrat', sans-serif;
+        background: linear-gradient(135deg, var(--bg1), var(--bg2));
+        color: #fff;
+        overflow-x: hidden;
+    }
+
+    /* ---------- CREATIVE MILLET BORDER (uses SVG data URI as border-image) ---------- */
+    /* A small rotated ellipse acts like a millet grain and repeats around the border */
+    .frame {
+        position: relative; /* so orbit can be positioned inside */
+        border-width: 24px;
+        border-style: solid;
+        border-image-source: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'><ellipse cx='12' cy='12' rx='8' ry='3.5' fill='%23d35400' transform='rotate(-25 12 12)' opacity='0.95'/></svg>");
+        border-image-slice: 1;
+        border-image-repeat: round;
+        border-radius: 22px;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.25);
+        padding: 14px; /* create space between border and content */
+        margin: 12px;
+        overflow: visible; /* allow orbit seeds to show */
+    }
+
+    /* ---------- ORBITING SEEDS (around inside of the border) ---------- */
+    /* orbit container covers the inner area of .frame and provides center for rotation */
+    .orbit {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: calc(100% - 48px);  /* shrink to avoid overlapping border */
+        height: calc(100% - 48px);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        overflow: visible;
+    }
+
+    /* single seed element */
+    .orbit .seed {
+        --angle: 0deg; /* starting offset given inline via style */
+        --r: 160px;    /* radius; will be updated by JS */
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: var(--seed-size);
+        height: calc(var(--seed-size) * 0.7);
+        margin-left: calc(var(--seed-size) / -2);
+        margin-top: calc((var(--seed-size) * 0.7) / -2);
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='18' viewBox='0 0 28 18'><ellipse cx='14' cy='9' rx='12' ry='5.5' fill='%23d35400' transform='rotate(-28 14 9)'/></svg>");
+        background-size: contain;
+        background-repeat: no-repeat;
+        transform-origin: center center;
+        will-change: transform;
+        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));
+        opacity: 0.95;
+    }
+
+    /* spin + translate to orbit. seeds remain upright via the inner rotate */
+    @keyframes orbit-spin {
+        from { transform: rotate(0deg) translateX(var(--r)) rotate(0deg); }
+        to   { transform: rotate(360deg) translateX(var(--r)) rotate(-360deg); }
+    }
+
+    /* give variations by assigning differing durations/delays inline via style attribute */
+    .orbit .seed {
+        animation-name: orbit-spin;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+    }
+
+    /* ---------- INTRO / OPENING ANIMATION ---------- */
+    #intro {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, rgba(0,0,0,0.15), rgba(0,0,0,0.25));
+        backdrop-filter: blur(6px);
+        pointer-events: none;
+        animation: introFade 1800ms ease-out forwards;
+    }
+    @keyframes introFade {
+        0% { opacity: 1; transform: scale(1.02); }
+        85% { opacity: 1; transform: scale(1); }
+        100% { opacity: 0; transform: scale(0.98); visibility: hidden; }
+    }
+
+    .intro-card {
+        text-align:center;
+        color:#fff;
+        padding: 28px 36px;
+        border-radius: 18px;
+        box-shadow: 0 10px 50px rgba(0,0,0,0.4);
+        background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+        transform-origin: center;
+        animation: introPop 900ms cubic-bezier(.2,.9,.2,1) forwards;
+    }
+    @keyframes introPop {
+        0% { transform: translateY(20px) scale(0.95); opacity: 0; }
+        60% { transform: translateY(-8px) scale(1.02); opacity: 1; }
+        100% { transform: translateY(0) scale(1); }
+    }
+    .intro-title { font-size: 28px; font-weight: 700; margin:0 0 6px; text-shadow: 0 6px 20px rgba(0,0,0,0.4); }
+    .intro-sub { font-size:14px; opacity:0.95; margin:0; }
+
+    /* falling millet grains animation (keeps as startup flair) */
+    .grain {
+        position: absolute;
+        top: -8%;
+        font-size: 18px;
+        opacity: 0.95;
+        transform: translateY(-10vh) rotate(-10deg);
+        animation: grainFall linear forwards;
+        pointer-events:none;
+        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.25));
+    }
+    @keyframes grainFall {
+        0% { transform: translateY(-5vh) translateX(0) rotate(-10deg); opacity:1; }
+        80% { opacity: 1; }
+        100% { transform: translateY(110vh) translateX(30vw) rotate(30deg); opacity:0; }
+    }
+
+    /* ---------- QUIZ CONTAINER (kept structure & data intact) ---------- */
+    .quiz-container { 
+        max-width: 900px; 
+        margin: 28px auto; 
+        background: rgba(255,255,255,0.06); 
+        backdrop-filter: blur(12px); 
+        padding: 30px; 
+        border-radius: 20px; 
+        box-shadow: 0 0 40px rgba(0,0,0,0.2); 
+        animation: fadeIn 900ms ease forwards; 
+        position: relative;
+        z-index: 2; /* above orbit so content remains clickable */
+    }
+    @keyframes fadeIn { 0% {opacity: 0; transform: translateY(-20px);} 100% {opacity: 1; transform: translateY(0);} }
+
+    h1, h2 { text-align: center; margin-bottom: 10px; text-shadow: 2px 2px 5px rgba(0,0,0,0.35); }
+    h1 { font-size: 34px; margin-top:0; }
+    h2 { font-size: 18px; font-weight:500; color: rgba(255,255,255,0.95); margin-top:6px; }
+
+    .question { margin-bottom: 28px; }
+    .options { display: flex; flex-wrap: wrap; gap: 12px; }
+    .option-card { background: rgba(255,255,255,0.12); padding: 12px 18px; border-radius: 14px; cursor: pointer; flex: 1 1 200px; text-align: center; border: 2px solid rgba(255,255,255,0.12); transition: all 0.28s ease; font-weight: 600; user-select:none; }
+    .option-card:hover { box-shadow: 0 0 20px 5px var(--accent); transform: translateY(-4px) scale(1.03); border-color: var(--accent); }
+    input[type="checkbox"] { display: none; }
+    input[type="checkbox"]:checked + label { box-shadow: 0 0 20px 5px var(--accent); border-color: var(--accent); transform: translateY(-4px) scale(1.03); background: rgba(255,255,255,0.18); }
+
+    .submit-btn { display: block; margin: 18px auto; padding: 14px 30px; font-size: 18px; background: linear-gradient(135deg, #00b894, #0984e3); color: #fff; border: none; border-radius: 28px; cursor: pointer; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; transition: all 0.32s ease; box-shadow: 0 6px 18px rgba(0,0,0,0.28); }
+    .submit-btn:hover { box-shadow: 0 0 30px 6px #55efc4; transform: scale(1.04); }
+
+    .result { text-align: center; font-size: 22px; margin-top: 18px; color: #55efc4; font-weight: 700; transition: all 0.3s ease; padding: 12px; border-radius: 12px; background: rgba(0,0,0,0.2); animation: popIn 420ms ease forwards; }
+    .result:hover { text-shadow: 0 0 18px #55efc4, 0 0 34px #00b894; transform: scale(1.03); }
+    @keyframes popIn { 0% {opacity: 0; transform: scale(0.96);} 100% {opacity: 1; transform: scale(1);} }
+
+    /* small screens */
+    @media (max-width:680px){
+        .option-card { flex: 1 1 100%; }
+        .quiz-container { padding: 20px; border-radius: 16px; }
+        .frame { border-width: 18px; border-radius: 14px; margin: 8px; padding:10px; }
+        /* reduce seed size on small screens */
+        :root { --seed-size: 14px; }
+    }
+</style>
+</head>
+<body>
+    <!-- INTRO overlay plays on page open -->
+    <div id="intro" aria-hidden="true">
+        <div class="intro-card">
+            <div class="intro-title">Millet Magic ✨</div>
+            <div class="intro-sub">Finding the perfect millet dish for you...</div>
+        </div>
+
+        <!-- multiple 'grain' spans produce falling millet effect; JS randomizes their positions/delays -->
+        <span class="grain" style="left:6%; animation-duration:1700ms; font-size:16px;">🌾</span>
+        <span class="grain" style="left:22%; animation-duration:2200ms; font-size:20px;">🌾</span>
+        <span class="grain" style="left:38%; animation-duration:1900ms; font-size:15px;">🌾</span>
+        <span class="grain" style="left:54%; animation-duration:2400ms; font-size:18px;">🌾</span>
+        <span class="grain" style="left:70%; animation-duration:2000ms; font-size:22px;">🌾</span>
+        <span class="grain" style="left:86%; animation-duration:2100ms; font-size:17px;">🌾</span>
+    </div>
+
+    <!-- wrap content inside .frame so border-image applies around everything -->
+    <div class="frame" id="frame">
+        <!-- ORBIT container sits inside frame and seeds orbit around its center near border -->
+        <div class="orbit" id="orbit" aria-hidden="true">
+            <!-- We'll create seeds programmatically for spacing & random durations -->
+            <!-- Fallback seeds for very old browsers (they'll be controlled by JS too) -->
+            <div class="seed" style="--angle:0deg; animation-duration: 9.8s; animation-delay: -0s;"></div>
+            <div class="seed" style="--angle:30deg; animation-duration: 11.2s; animation-delay: -1s;"></div>
+            <div class="seed" style="--angle:60deg; animation-duration: 10.4s; animation-delay: -2s;"></div>
+            <div class="seed" style="--angle:90deg; animation-duration: 12s; animation-delay: -3s;"></div>
+            <div class="seed" style="--angle:120deg; animation-duration: 9.2s; animation-delay: -4s;"></div>
+            <div class="seed" style="--angle:150deg; animation-duration: 10.9s; animation-delay: -5s;"></div>
+            <div class="seed" style="--angle:180deg; animation-duration: 11.6s; animation-delay: -6s;"></div>
+            <div class="seed" style="--angle:210deg; animation-duration: 10.1s; animation-delay: -7s;"></div>
+            <div class="seed" style="--angle:240deg; animation-duration: 12.4s; animation-delay: -8s;"></div>
+            <div class="seed" style="--angle:270deg; animation-duration: 9.6s; animation-delay: -9s;"></div>
+            <div class="seed" style="--angle:300deg; animation-duration: 11.9s; animation-delay: -10s;"></div>
+            <div class="seed" style="--angle:330deg; animation-duration: 10.7s; animation-delay: -11s;"></div>
+        </div>
+
+        <div class="quiz-container">
+            <h1>Millet Nutrition Quiz</h1>
+            <h2>Discover Your Perfect Millet Dish!</h2>
+
+            <form id="milletQuiz">
+
+            <!-- Questions 1–10 (DATA / FORM STRUCTURE KEPT EXACTLY AS PROVIDED) -->
+            <div class="question">
+                <p>1. Which nutrients do you want to focus on?</p>
+                <div class="options">
+                    <input type="checkbox" id="q1a" name="q1" value="Protein"><label class="option-card" for="q1a">Protein</label>
+                    <input type="checkbox" id="q1b" name="q1" value="Fiber"><label class="option-card" for="q1b">Fiber</label>
+                    <input type="checkbox" id="q1c" name="q1" value="Iron"><label class="option-card" for="q1c">Iron</label>
+                    <input type="checkbox" id="q1d" name="q1" value="Calcium"><label class="option-card" for="q1d">Calcium</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>2. Preferred meal type?</p>
+                <div class="options">
+                    <input type="checkbox" id="q2a" name="q2" value="Breakfast"><label class="option-card" for="q2a">Breakfast</label>
+                    <input type="checkbox" id="q2b" name="q2" value="Lunch"><label class="option-card" for="q2b">Lunch</label>
+                    <input type="checkbox" id="q2c" name="q2" value="Dinner"><label class="option-card" for="q2c">Dinner</label>
+                    <input type="checkbox" id="q2d" name="q2" value="Snack"><label class="option-card" for="q2d">Snack</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>3. Taste preference?</p>
+                <div class="options">
+                    <input type="checkbox" id="q3a" name="q3" value="Sweet"><label class="option-card" for="q3a">Sweet</label>
+                    <input type="checkbox" id="q3b" name="q3" value="Savory"><label class="option-card" for="q3b">Savory</label>
+                    <input type="checkbox" id="q3c" name="q3" value="Spicy"><label class="option-card" for="q3c">Spicy</label>
+                    <input type="checkbox" id="q3d" name="q3" value="Neutral"><label class="option-card" for="q3d">Neutral</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>4. Dietary restriction?</p>
+                <div class="options">
+                    <input type="checkbox" id="q4a" name="q4" value="Gluten-Free"><label class="option-card" for="q4a">Gluten-Free</label>
+                    <input type="checkbox" id="q4b" name="q4" value="Low-Carb"><label class="option-card" for="q4b">Low-Carb</label>
+                    <input type="checkbox" id="q4c" name="q4" value="Low-Fat"><label class="option-card" for="q4c">Low-Fat</label>
+                    <input type="checkbox" id="q4d" name="q4" value="None"><label class="option-card" for="q4d">None</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>5. Cooking time preference?</p>
+                <div class="options">
+                    <input type="checkbox" id="q5a" name="q5" value="Quick"><label class="option-card" for="q5a">Quick</label>
+                    <input type="checkbox" id="q5b" name="q5" value="Moderate"><label class="option-card" for="q5b">Moderate</label>
+                    <input type="checkbox" id="q5c" name="q5" value="Long"><label class="option-card" for="q5c">Long</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>6. Serving style?</p>
+                <div class="options">
+                    <input type="checkbox" id="q6a" name="q6" value="Soup"><label class="option-card" for="q6a">Soup</label>
+                    <input type="checkbox" id="q6b" name="q6" value="Salad"><label class="option-card" for="q6b">Salad</label>
+                    <input type="checkbox" id="q6c" name="q6" value="Main-Course"><label class="option-card" for="q6c">Main Course</label>
+                    <input type="checkbox" id="q6d" name="q6" value="Snack"><label class="option-card" for="q6d">Snack</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>7. Cooking skill level?</p>
+                <div class="options">
+                    <input type="checkbox" id="q7a" name="q7" value="Beginner"><label class="option-card" for="q7a">Beginner</label>
+                    <input type="checkbox" id="q7b" name="q7" value="Intermediate"><label class="option-card" for="q7b">Intermediate</label>
+                    <input type="checkbox" id="q7c" name="q7" value="Expert"><label class="option-card" for="q7c">Expert</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>8. Preferred millet type?</p>
+                <div class="options">
+                    <input type="checkbox" id="q8a" name="q8" value="Foxtail"><label class="option-card" for="q8a">Foxtail Millet</label>
+                    <input type="checkbox" id="q8b" name="q8" value="Barnyard"><label class="option-card" for="q8b">Barnyard Millet</label>
+                    <input type="checkbox" id="q8c" name="q8" value="Pearl"><label class="option-card" for="q8c">Pearl Millet</label>
+                    <input type="checkbox" id="q8d" name="q8" value="Finger"><label class="option-card" for="q8d">Finger Millet</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>9. Health goal?</p>
+                <div class="options">
+                    <input type="checkbox" id="q9a" name="q9" value="Weight-Loss"><label class="option-card" for="q9a">Weight Loss</label>
+                    <input type="checkbox" id="q9b" name="q9" value="Muscle-Building"><label class="option-card" for="q9b">Muscle Building</label>
+                    <input type="checkbox" id="q9c" name="q9" value="Heart-Health"><label class="option-card" for="q9c">Heart Health</label>
+                    <input type="checkbox" id="q9d" name="q9" value="Digestive-Health"><label class="option-card" for="q9d">Digestive Health</label>
+                </div>
+            </div>
+
+            <div class="question">
+                <p>10. Serving preference?</p>
+                <div class="options">
+                    <input type="checkbox" id="q10a" name="q10" value="Hot"><label class="option-card" for="q10a">Hot</label>
+                    <input type="checkbox" id="q10b" name="q10" value="Cold"><label class="option-card" for="q10b">Cold</label>
+                    <input type="checkbox" id="q10c" name="q10" value="Room-Temp"><label class="option-card" for="q10c">Room Temperature</label>
+                </div>
+            </div>
+
+            <button type="button" class="submit-btn" onclick="suggestDish()">Discover My Millet Dish</button>
+            </form>
+
+            <div class="result" id="result"></div>
+        </div>
+    </div>
+
+<script>
+/* -------------------------
+   DATA: kept exactly the same
+   ------------------------- */
+const dishes = [
+    {
+        "name": "Foxtail Millet Vada",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Porridge",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Roti",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Kheer",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pakora",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pakora",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Fry",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Roti",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Tikki",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Roti",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Sabzi",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Payasam",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pongal",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Halwa",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Idli",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Upma",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Porridge",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Sambar",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Sabzi",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pulao",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pattice",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Idli",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pongal",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Kheer",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Payasam",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pongal",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Roti",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Dal",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Idli",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Tikki",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Upma",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Bowl",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pancake",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Halwa",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Vada",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Porridge",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Cutlet",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Pattice",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Bowl",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Idli",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Sabzi",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Sambar",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Idli",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Khichdi",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Chilla",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Dosa",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Halwa",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Dal",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Foxtail",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Ladoo",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Foxtail",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Foxtail Millet Biryani",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Foxtail",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Payasam",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Ladoo",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Kheer",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Kheer",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Roti",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Pancake",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Fry",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Chilla",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Vada",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Curry",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Porridge",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Pancake",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Tikki",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Cutlet",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Pakora",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Fry",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Paratha",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Kheer",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Dal",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Roti",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Tikki",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Pattice",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Halwa",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Roti",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Halwa",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Fry",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Khichdi",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Dosa",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Pongal",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Vada",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Upma",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Fry",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Sabzi",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Idli",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Khichdi",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Pancake",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Biryani",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Chilla",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Kheer",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Sambar",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Curry",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Biryani",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Tikki",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Roti",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Halwa",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Chilla",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Ladoo",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Barnyard",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Fry",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Dal",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Dinner",
+        "millet": "Barnyard",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Barnyard Millet Khichdi",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Barnyard",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Tikki",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Poha",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Paratha",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Kheer",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Cutlet",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Sabzi",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Fry",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Kheer",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Dosa",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Sambar",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Lunch",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Dosa",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Poha",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Bowl",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Dosa",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Curry",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Khichdi",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Bowl",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Roti",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Roti",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Idli",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Khichdi",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Sambar",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Biryani",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Dosa",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Vada",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Porridge",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Dal",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Rasam",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Pakora",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Fry",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Paratha",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Dosa",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Halwa",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Curry",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Biryani",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Roti",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Lunch",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Porridge",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Pongal",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Pongal",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Poha",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Fry",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Sambar",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Paratha",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Chilla",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Sambar",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Vada",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Dosa",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Pearl Millet Sabzi",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Snack",
+        "millet": "Pearl",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Pearl Millet Pattice",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Pearl Millet Fry",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Pearl",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Pakora",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Poha",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Dosa",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Dosa",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Biryani",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Ladoo",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Pancake",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Fry",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Pulao",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Pongal",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Dosa",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Upma",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Khichdi",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Sambar",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Pattice",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Kheer",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Khichdi",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Pulao",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Sambar",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Fry",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Chilla",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Biryani",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Curry",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Neutral",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Biryani",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Pattice",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Khichdi",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Poha",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Sambar",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Dal",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Ladoo",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Sambar",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Cutlet",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Biryani",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Sambar",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Paratha",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Vada",
+        "nutrients": [
+            "Protein"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Pattice",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Biryani",
+        "nutrients": [
+            "Protein",
+            "Fiber"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Curry",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Pakora",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Sabzi",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Snack"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Pongal",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Savory",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Long",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Beginner",
+        "healthGoals": [
+            "Muscle-Building"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    },
+    {
+        "name": "Finger Millet Sambar",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Snack",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Roti",
+        "nutrients": [
+            "Fiber"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Low-Fat"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Biryani",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Main-Course"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Rasam",
+        "nutrients": [
+            "Iron",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Salad"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Pattice",
+        "nutrients": [
+            "Iron",
+            "Fiber"
+        ],
+        "type": "Lunch",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "None"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Roti",
+        "nutrients": [
+            "Calcium"
+        ],
+        "type": "Breakfast",
+        "millet": "Finger",
+        "taste": "Sweet",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Quick",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Intermediate",
+        "healthGoals": [
+            "Digestive-Health"
+        ],
+        "servingTemp": [
+            "Hot"
+        ]
+    },
+    {
+        "name": "Finger Millet Pakora",
+        "nutrients": [
+            "Protein",
+            "Calcium"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Spicy",
+        "dietary": [
+            "Low-Carb"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Heart-Health"
+        ],
+        "servingTemp": [
+            "Room-Temp"
+        ]
+    },
+    {
+        "name": "Finger Millet Pancake",
+        "nutrients": [
+            "Iron"
+        ],
+        "type": "Dinner",
+        "millet": "Finger",
+        "taste": "Neutral",
+        "dietary": [
+            "Gluten-Free"
+        ],
+        "cookTime": "Moderate",
+        "servingStyle": [
+            "Soup"
+        ],
+        "skill": "Expert",
+        "healthGoals": [
+            "Weight-Loss"
+        ],
+        "servingTemp": [
+            "Cold"
+        ]
+    }
+];
+
+/* -------------------------
+   SUGGESTION FUNCTION (kept intact)
+   ------------------------- */
+function suggestDish() {
+    const selected = {};
+    const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+    if(checkboxes.length === 0){
+        alert("Select at least one option!");
+        return;
+    }
+    checkboxes.forEach(cb => {
+        if(!selected[cb.name]) selected[cb.name] = [];
+        selected[cb.name].push(cb.value);
+    });
+
+    let matched = dishes.filter(d => {
+        if(selected.q8 && !selected.q8.includes(d.millet)) return false;
+        if(selected.q1 && !d.nutrients.some(n => selected.q1.includes(n))) return false;
+        return true;
+    });
+
+    let message = "";
+    if(matched.length > 0) {
+        const randomDish = matched[Math.floor(Math.random() * matched.length)];
+        message = `🍽️ <b>${randomDish.name}</b>! Rich in ${randomDish.nutrients.join(", ")}.`;
+    } else {
+        message = "No exact match found, but try any millet dish from the list!";
+    }
+
+    document.getElementById("result").innerHTML = message;
+}
+
+/* -------------------------
+   ORBIT HANDLER
+   - positions seeds on a radius that hugs the inner border
+   - assigns per-seed radius and starting angle so they orbit around the border
+   ------------------------- */
+function setupOrbitSeeds() {
+    const frame = document.getElementById('frame');
+    const orbit = document.getElementById('orbit');
+    if (!frame || !orbit) return;
+
+    // Calculate radius: take the smaller of frame inner width/height /2, minus padding so seeds sit near border
+    const innerRect = {
+        width: frame.clientWidth - 28,  // slightly shrink to keep seeds inside border
+        height: frame.clientHeight - 28
+    };
+    const radius = Math.min(innerRect.width, innerRect.height) / 2 - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--seed-size')) || 18);
+
+    // set CSS var --r on orbit so keyframe uses it
+    orbit.style.setProperty('--r', radius + 'px');
+
+    // Get all seed elements and set their initial transforms (angle) and animate durations/delays for variety
+    const seeds = orbit.querySelectorAll('.seed');
+    const seedCount = seeds.length;
+    seeds.forEach((s, idx) => {
+        // distribute start angles evenly
+        const startAngle = (360 / seedCount) * idx;
+        s.style.setProperty('--angle', startAngle + 'deg');
+
+        // position seed at starting angle immediately (so there's no pop)
+        // compute x,y from angle and radius to nudge seed to starting location
+        const radians = (startAngle - 90) * (Math.PI / 180); // subtract 90 so 0deg is top
+        const cx = frame.clientWidth / 2;
+        const cy = frame.clientHeight / 2;
+        const x = cx + radius * Math.cos(radians);
+        const y = cy + radius * Math.sin(radians);
+
+        // convert to percent relative to orbit element to place seed exactly
+        // We'll keep CSS animation to rotate around center, but set initial transform to the computed angle/position
+        s.style.left = '50%';
+        s.style.top = '50%';
+        // stagger durations a bit for organic movement
+        const base = 10.5; // seconds
+        const variance = (idx % 3) + (idx * 0.08);
+        const duration = (base + variance).toFixed(2) + 's';
+        s.style.animationDuration = duration;
+        // give negative delay so seeds are spaced along orbit immediately
+        const delay = '-' + (idx * 0.85).toFixed(2) + 's';
+        s.style.animationDelay = delay;
+        // rotate initial placement via transform so CSS animation continues from that offset
+        s.style.transform = `rotate(${startAngle}deg) translateX(${radius}px) rotate(${ -startAngle }deg)`;
+    });
+}
+
+// recompute on load and resize
+window.addEventListener('load', () => {
+    setupOrbitSeeds();
+
+    // remove intro overlay after animation ends (keep as before)
+    const intro = document.getElementById('intro');
+    setTimeout(() => {
+        if(intro && intro.parentNode) intro.parentNode.removeChild(intro);
+    }, 1900);
+
+    // also randomize the falling grains timing as before
+    document.querySelectorAll('.grain').forEach((g, i) => {
+        const dur = 1600 + Math.floor(Math.random()*1000); // 1600-2600ms
+        const delay = Math.floor(Math.random()*400); // 0-400ms
+        g.style.animationDuration = dur + 'ms';
+        g.style.animationDelay = delay + 'ms';
+        const left = (6 + i*14 + Math.random()*6);
+        g.style.left = left + '%';
+        g.style.opacity = 0.95 - Math.random()*0.25;
+    });
+});
+
+window.addEventListener('resize', () => {
+    // small debounce to avoid huge churn on resize
+    clearTimeout(window.__orbitResizeTimer);
+    window.__orbitResizeTimer = setTimeout(setupOrbitSeeds, 120);
+});
+</script>
+</body>
+</html>
